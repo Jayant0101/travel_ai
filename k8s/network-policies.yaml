@@ -1,0 +1,162 @@
+# ──────────────────────────────────────────────
+# Network Policy: Default Deny All
+# ──────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# ──────────────────────────────────────────────
+# Network Policy: Allow Ingress -> Frontend
+# ──────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-ingress
+spec:
+  podSelector:
+    matchLabels:
+      tier: frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from: []  # Allow from all (Ingress Controller / LoadBalancer)
+    ports:
+    - protocol: TCP
+      port: 80
+  egress:
+  - to:       # Allow frontend -> backend
+    - podSelector:
+        matchLabels:
+          tier: backend
+    ports:
+    - protocol: TCP
+      port: 8000
+  - to: []    # Allow DNS resolution
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# ──────────────────────────────────────────────
+# Network Policy: Allow Ingress -> Backend
+# ──────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-traffic
+spec:
+  podSelector:
+    matchLabels:
+      tier: backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: frontend
+    ports:
+    - protocol: TCP
+      port: 8000
+  - from: []  # Also allow direct Ingress traffic
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  - to:       # Allow backend -> MongoDB
+    - podSelector:
+        matchLabels:
+          tier: database
+    ports:
+    - protocol: TCP
+      port: 27017
+  - to:       # Allow backend -> Redis
+    - podSelector:
+        matchLabels:
+          tier: cache
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to: []    # Allow DNS resolution
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  - to: []    # Allow HTTPS egress (for Google Gemini / OpenAI API calls)
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# ──────────────────────────────────────────────
+# Network Policy: Allow Backend -> MongoDB ONLY
+# ──────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-mongo-from-backend
+spec:
+  podSelector:
+    matchLabels:
+      tier: database
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: backend
+    ports:
+    - protocol: TCP
+      port: 27017
+  egress:
+  - to: []    # Allow DNS resolution
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# ──────────────────────────────────────────────
+# Network Policy: Allow Backend -> Redis ONLY
+# ──────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-from-backend
+spec:
+  podSelector:
+    matchLabels:
+      tier: cache
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: backend
+    ports:
+    - protocol: TCP
+      port: 6379
+  egress:
+  - to: []    # Allow DNS resolution
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53

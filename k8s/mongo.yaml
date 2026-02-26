@@ -1,0 +1,112 @@
+# ──────────────────────────────────────────────
+# MongoDB StatefulSet
+# ──────────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: travel-ai-mongo
+  labels:
+    app: travel-ai
+    tier: database
+spec:
+  serviceName: travel-ai-mongo-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: travel-ai
+      tier: database
+  template:
+    metadata:
+      labels:
+        app: travel-ai
+        tier: database
+    spec:
+      containers:
+      - name: mongo
+        image: mongo:7.0
+        ports:
+        - containerPort: 27017
+          name: mongo
+          protocol: TCP
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+        livenessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: mongo-data
+          mountPath: /data/db
+  volumeClaimTemplates:
+  - metadata:
+      name: mongo-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi
+
+---
+# ──────────────────────────────────────────────
+# MongoDB Headless Service (for StatefulSet)
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: travel-ai-mongo-headless
+  labels:
+    app: travel-ai
+    tier: database
+spec:
+  clusterIP: None
+  ports:
+  - port: 27017
+    targetPort: 27017
+    protocol: TCP
+    name: mongo
+  selector:
+    app: travel-ai
+    tier: database
+
+---
+# ──────────────────────────────────────────────
+# MongoDB ClusterIP Service (for app connections)
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  labels:
+    app: travel-ai
+    tier: database
+spec:
+  type: ClusterIP
+  ports:
+  - port: 27017
+    targetPort: 27017
+    protocol: TCP
+    name: mongo
+  selector:
+    app: travel-ai
+    tier: database

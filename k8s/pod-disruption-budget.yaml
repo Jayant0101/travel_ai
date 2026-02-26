@@ -1,0 +1,53 @@
+# ──────────────────────────────────────────────
+# Pod Disruption Budgets (PDB)
+# Ensures minimum availability during node drains,
+# upgrades, and rolling deployments.
+# Ref: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/
+# ──────────────────────────────────────────────
+
+# Backend: Keep at least 70% of pods running during disruptions
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: travel-ai-backend-pdb
+  labels:
+    app: travel-ai
+    tier: backend
+spec:
+  minAvailable: "70%"
+  selector:
+    matchLabels:
+      app: travel-ai
+      tier: backend
+
+---
+# Frontend: Keep at least 1 pod running during disruptions
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: travel-ai-frontend-pdb
+  labels:
+    app: travel-ai
+    tier: frontend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: travel-ai
+      tier: frontend
+
+---
+# MongoDB: Keep at least 2 of 3 pods (maintains quorum)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: travel-ai-mongo-pdb
+  labels:
+    app: travel-ai
+    tier: database
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: travel-ai
+      tier: database

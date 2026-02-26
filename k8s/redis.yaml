@@ -1,0 +1,79 @@
+# ──────────────────────────────────────────────
+# Redis Deployment (Caching, Sessions, Rate Limits)
+# ──────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app: travel-ai
+    tier: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: travel-ai
+      tier: cache
+  template:
+    metadata:
+      labels:
+        app: travel-ai
+        tier: cache
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        args: ["--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+        ports:
+        - containerPort: 6379
+          name: redis
+          protocol: TCP
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "300Mi"
+        livenessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        emptyDir: {}
+
+---
+# ──────────────────────────────────────────────
+# Redis Service
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app: travel-ai
+    tier: cache
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    app: travel-ai
+    tier: cache

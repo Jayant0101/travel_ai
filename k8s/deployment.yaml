@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: travel-ai-backend
+  labels:
+    app: travel-ai
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: travel-ai
+      tier: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: travel-ai
+        tier: backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: backend
+        image: yourdockerhub/travel-ai-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+
+        # ── Resource Management ──
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+
+        # ── Health Probes ──
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 10
+
+        # ── Configuration from ConfigMap (portable, no vendor lock-in) ──
+        envFrom:
+        - configMapRef:
+            name: travel-ai-config
+
+        # ── Secrets (sensitive values only) ──
+        env:
+        - name: GOOGLE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: travel-ai-secrets
+              key: google-api-key
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: travel-ai-secrets
+              key: jwt-secret
+        - name: MONGO_URL
+          valueFrom:
+            secretKeyRef:
+              name: travel-ai-secrets
+              key: mongo-url
+
+        # ── Security ──
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+              - ALL

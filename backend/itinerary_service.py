@@ -8,34 +8,24 @@ logger = logging.getLogger(__name__)
 
 class ItineraryService:
     def __init__(self):
-        self.api_key = os.environ.get("EMERGENT_LLM_KEY")
-        if not self.api_key:
-            raise ValueError("EMERGENT_LLM_KEY not found in environment variables")
+        # Use the vendor-agnostic AI provider abstraction
+        from ai_provider import get_ai_provider
+        self.ai_provider = get_ai_provider()
     
     async def generate_itinerary(self, trip_data: TripCreate) -> Itinerary:
-        """Generate travel itinerary using Gemini AI"""
+        """Generate travel itinerary using the configured AI provider (Gemini/OpenAI/Ollama)"""
         try:
-            from emergentintegrations.llm.chat import LlmChat, UserMessage
-            
-            # Create system message for travel planning
-            system_message = """You are an expert travel planner AI. Generate detailed, personalized travel itineraries based on user preferences. 
+            # System instruction for travel planning
+            system_instruction = """You are an expert travel planner AI. Generate detailed, personalized travel itineraries based on user preferences. 
             Always respond with valid JSON in the exact format specified. Include realistic prices, activities, and recommendations."""
-            
-            # Create chat instance with Gemini
-            chat = LlmChat(
-                api_key=self.api_key,
-                session_id=f"trip_{trip_data.destination}",
-                system_message=system_message
-            ).with_model("gemini", "gemini-2.5-flash")
             
             # Build the prompt
             prompt = self._build_prompt(trip_data)
             
-            # Send message to Gemini
-            user_message = UserMessage(text=prompt)
-            response = await chat.send_message(user_message)
+            # Use the abstracted AI provider (vendor-agnostic)
+            response = await self.ai_provider.generate(prompt, system_instruction)
             
-            logger.info(f"Gemini response received: {response[:200]}...")
+            logger.info(f"AI response received: {response[:200]}...")
             
             # Parse response
             itinerary_data = self._parse_response(response, trip_data)
