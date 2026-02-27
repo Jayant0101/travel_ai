@@ -1,0 +1,19 @@
+# Helm release values for ingress-nginx
+# Install with:
+#   helm upgrade --install ingress-nginx ingress-nginx \
+#     --repo https://kubernetes.github.io/ingress-nginx \
+#     --namespace ingress-nginx --create-namespace \
+#     -f deploy/bootstrap/ingress-nginx/helmrelease.yaml
+controller:
+  replicaCount: 2
+  service:
+    type: LoadBalancer
+    annotations:
+      cloud.google.com/load-balancer-type: "External"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 90Mi
+  config:
+    use-forwarded-headers: "true"
+    proxy-body-size: "10m"

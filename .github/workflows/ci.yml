@@ -1,0 +1,232 @@
+name: CI — Build, Lint & Push
+
+on:
+  push:
+    branches: ["main", "develop", "dev/**", "feature/**"]
+  pull_request:
+    branches: ["main", "develop"]
+
+permissions:
+  contents: read
+  id-token: write     # For Workload Identity Federation
+
+env:
+  REGION: us-central1
+  REGISTRY: us-central1-docker.pkg.dev
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REPO: travel-ai
+
+jobs:
+  # ────────────────────────────────────────────────
+  # 1. Backend lint + test
+  # ────────────────────────────────────────────────
+  backend-ci:
+    name: Backend — Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Lint with flake8
+        run: |
+          flake8 backend --exclude=venv,__pycache__ --count \
+            --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 backend --exclude=venv,__pycache__ --count \
+            --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Test with pytest
+        run: pytest backend/tests -v --tb=short
+
+  # ────────────────────────────────────────────────
+  # 2. Frontend production build
+  # ────────────────────────────────────────────────
+  frontend-ci:
+    name: Frontend — Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Production build
+        working-directory: frontend
+        run: npm run build
+        env:
+          CI: false
+
+  # ────────────────────────────────────────────────
+  # 3. Helm lint + template check
+  # ────────────────────────────────────────────────
+  helm-lint:
+    name: Helm — Lint & Template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.14.0"
+
+      - name: Helm lint (default values)
+        run: helm lint deploy/helm/travel-ai
+
+      - name: Helm template — dev
+        run: |
+          helm template travel-ai deploy/helm/travel-ai \
+            -f deploy/helm/travel-ai/values-dev.yaml \
+            --set global.imageRegistry=example.pkg.dev/project/travel-ai \
+            --set backend.image.tag=ci-test \
+            --set frontend.image.tag=ci-test \
+            > /dev/null
+
+      - name: Helm template — staging
+        run: |
+          helm template travel-ai deploy/helm/travel-ai \
+            -f deploy/helm/travel-ai/values-staging.yaml \
+            --set global.imageRegistry=example.pkg.dev/project/travel-ai \
+            --set backend.image.tag=ci-test \
+            --set frontend.image.tag=ci-test \
+            > /dev/null
+
+      - name: Helm template — preprod
+        run: |
+          helm template travel-ai deploy/helm/travel-ai \
+            -f deploy/helm/travel-ai/values-preprod.yaml \
+            --set global.imageRegistry=example.pkg.dev/project/travel-ai \
+            --set backend.image.tag=ci-test \
+            --set frontend.image.tag=ci-test \
+            > /dev/null
+
+      - name: Helm template — prod
+        run: |
+          helm template travel-ai deploy/helm/travel-ai \
+            -f deploy/helm/travel-ai/values-prod.yaml \
+            --set global.imageRegistry=example.pkg.dev/project/travel-ai \
+            --set backend.image.tag=ci-test \
+            --set frontend.image.tag=ci-test \
+            > /dev/null
+
+  # ────────────────────────────────────────────────
+  # 4. Build & push images + Trivy security scan
+  # ────────────────────────────────────────────────
+  build-push:
+    name: Build, Scan & Push Images
+    runs-on: ubuntu-latest
+    needs: [backend-ci, frontend-ci, helm-lint]
+    if: github.event_name == 'push'
+    outputs:
+      backend-digest: ${{ steps.push-backend.outputs.digest }}
+      frontend-digest: ${{ steps.push-frontend.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate image tag
+        id: meta
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Backend ──
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/travel-ai-backend:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan backend for CVEs (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/travel-ai-backend:${{ steps.meta.outputs.tag }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL
+
+      - name: Push backend image
+        id: push-backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/travel-ai-backend:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Frontend ──
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: false
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/travel-ai-frontend:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan frontend for CVEs (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/travel-ai-frontend:${{ steps.meta.outputs.tag }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL
+
+      - name: Push frontend image
+        id: push-frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/travel-ai-frontend:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save image digests artifact
+        run: |
+          echo "backend=${{ steps.push-backend.outputs.digest }}" > digests.txt
+          echo "frontend=${{ steps.push-frontend.outputs.digest }}" >> digests.txt
+          echo "tag=${{ steps.meta.outputs.tag }}" >> digests.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-digests
+          path: digests.txt
+          retention-days: 30
