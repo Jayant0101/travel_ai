@@ -83,4 +83,5 @@ export default memo(function Navbar() {
             </div>
         </nav>
     );
-}
+});
+
