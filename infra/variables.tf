@@ -54,4 +54,9 @@ variable "ingress_ip" {
   description = "IP address for DNS A records (ingress-nginx LB IP)"
   type        = string
   default     = "0.0.0.0"
+
+  validation {
+    condition     = var.ingress_ip != "0.0.0.0"
+    error_message = "ingress_ip must be updated to the actual ingress-nginx LoadBalancer IP after provisioning."
+  }
 }
