@@ -12,9 +12,9 @@ backend:
       memory: "256Mi"
   hpa:
     enabled: false
+    # minReplicas/maxReplicas kept for easy enablement; ignored when enabled: false
     minReplicas: 1
     maxReplicas: 2
-  livenessProbe:
     initialDelaySeconds: 30
     periodSeconds: 30
   readinessProbe:
@@ -34,9 +34,9 @@ frontend:
       memory: "128Mi"
   hpa:
     enabled: false
+    # minReplicas/maxReplicas kept for easy enablement; ignored when enabled: false
     minReplicas: 1
     maxReplicas: 2
-  pdb:
     enabled: false
 
 ingress:
