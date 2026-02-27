@@ -1,0 +1,8 @@
+# Helm release values for external-secrets operator
+# Install with:
+#   helm upgrade --install external-secrets external-secrets \
+#     --repo https://charts.external-secrets.io \
+#     --namespace external-secrets --create-namespace \
+#     -f deploy/bootstrap/external-secrets/helmrelease.yaml
+installCRDs: true
+replicaCount: 1

@@ -1,0 +1,72 @@
+name: CD — Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Verified image tag to deploy to production (required)"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: us-central1
+  REGISTRY: us-central1-docker.pkg.dev
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REPO: travel-ai
+  CLUSTER: travel-ai-cluster
+  NAMESPACE: prod
+
+jobs:
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: prod      # requires manual approval gate in GitHub Environments
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER }}
+          location: ${{ env.REGION }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.14.0"
+
+      - name: Deploy to production namespace
+        run: |
+          helm upgrade --install travel-ai deploy/helm/travel-ai \
+            --namespace "$NAMESPACE" \
+            --create-namespace \
+            -f deploy/helm/travel-ai/values-prod.yaml \
+            --set global.imageRegistry="${REGISTRY}/${PROJECT_ID}/${REPO}" \
+            --set backend.image.tag="${{ github.event.inputs.image_tag }}" \
+            --set frontend.image.tag="${{ github.event.inputs.image_tag }}" \
+            --atomic \
+            --timeout 10m \
+            --wait \
+            --cleanup-on-fail
+
+      - name: Verify rollout
+        run: |
+          kubectl rollout status deployment/travel-ai-backend -n "$NAMESPACE" --timeout=5m
+          kubectl rollout status deployment/travel-ai-frontend -n "$NAMESPACE" --timeout=5m
+
+      - name: Smoke test — backend health
+        run: |
+          kubectl run smoke-test --image=curlimages/curl:latest \
+            --restart=Never -n "$NAMESPACE" \
+            --command -- curl -sf http://travel-ai-backend/api/health
+          kubectl wait --for=condition=Completed pod/smoke-test -n "$NAMESPACE" --timeout=30s
+          kubectl delete pod smoke-test -n "$NAMESPACE" --ignore-not-found

@@ -1,0 +1,50 @@
+global:
+  env: dev
+
+backend:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+  hpa:
+    enabled: false
+    # minReplicas/maxReplicas kept for easy enablement; ignored when enabled: false
+    minReplicas: 1
+    maxReplicas: 2
+    initialDelaySeconds: 30
+    periodSeconds: 30
+  readinessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 15
+  pdb:
+    enabled: false
+
+frontend:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+  hpa:
+    enabled: false
+    # minReplicas/maxReplicas kept for easy enablement; ignored when enabled: false
+    minReplicas: 1
+    maxReplicas: 2
+
+ingress:
+  host: dev.example.com
+  tls:
+    clusterIssuer: letsencrypt-staging
+
+config:
+  logLevel: "DEBUG"
+  corsOrigins: "*"
+  rateLimitPerMinute: "100"
+  rateLimitAiPerMinute: "20"

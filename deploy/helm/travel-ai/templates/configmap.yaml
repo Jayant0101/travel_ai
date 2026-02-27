@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "travel-ai.fullname" . }}-config
+  labels:
+    {{- include "travel-ai.labels" . | nindent 4 }}
+data:
+  AI_PROVIDER: {{ .Values.config.aiProvider | quote }}
+  AI_MODEL: {{ .Values.config.aiModel | quote }}
+  DB_NAME: {{ .Values.config.dbName | quote }}
+  CORS_ORIGINS: {{ .Values.config.corsOrigins | quote }}
+  JWT_ALGORITHM: {{ .Values.config.jwtAlgorithm | quote }}
+  ACCESS_TOKEN_EXPIRE_MINUTES: {{ .Values.config.accessTokenExpireMinutes | quote }}
+  REFRESH_TOKEN_EXPIRE_DAYS: {{ .Values.config.refreshTokenExpireDays | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  MONGO_MAX_POOL_SIZE: {{ .Values.config.mongoMaxPoolSize | quote }}
+  MONGO_MIN_POOL_SIZE: {{ .Values.config.mongoMinPoolSize | quote }}
+  CACHE_BACKEND: {{ .Values.config.cacheBackend | quote }}
+  REDIS_URL: {{ .Values.config.redisUrl | quote }}
+  CACHE_TTL_SECONDS: {{ .Values.config.cacheTtlSeconds | quote }}
+  RATE_LIMIT_PER_MINUTE: {{ .Values.config.rateLimitPerMinute | quote }}
+  RATE_LIMIT_AI_PER_MINUTE: {{ .Values.config.rateLimitAiPerMinute | quote }}

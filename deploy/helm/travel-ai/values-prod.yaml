@@ -1,0 +1,64 @@
+global:
+  env: prod
+
+backend:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "1Gi"
+  hpa:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 65
+    targetMemoryUtilizationPercentage: 80
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 20
+    periodSeconds: 15
+    failureThreshold: 5
+  pdb:
+    enabled: true
+    minAvailable: "70%"
+
+frontend:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+  hpa:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    minAvailable: 2
+
+ingress:
+  host: app.example.com
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+
+config:
+  logLevel: "WARNING"
+  rateLimitPerMinute: "30"
+  rateLimitAiPerMinute: "5"

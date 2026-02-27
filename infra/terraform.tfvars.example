@@ -1,0 +1,5 @@
+project_id   = "my-gcp-project"
+region       = "us-central1"
+cluster_name = "travel-ai-cluster"
+dns_zone_name = "travel-ai.example.com"
+ingress_ip   = "0.0.0.0"   # Update after ingress-nginx LB is provisioned

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: travel-ai-limits
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "256Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    max:
+      cpu: "2"
+      memory: "2Gi"
+  - type: Pod
+    max:
+      cpu: "4"
+      memory: "4Gi"

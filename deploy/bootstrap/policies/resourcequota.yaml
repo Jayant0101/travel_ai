@@ -1,0 +1,15 @@
+# ResourceQuota applied per environment namespace.
+# Apply with: kubectl apply -f deploy/bootstrap/policies/resourcequota.yaml -n <namespace>
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: travel-ai-quota
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 4Gi
+    limits.cpu: "8"
+    limits.memory: 8Gi
+    pods: "20"
+    services: "10"
+    persistentvolumeclaims: "4"
